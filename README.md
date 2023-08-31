@@ -53,8 +53,8 @@ On linux systems, the startup file is likely found at `~/.julia/config/startup.j
 
 ## Spectra simulation 
 
-![o1s_spectra](https://github.com/Center-for-Atmospheric-Research-ATMOS/PROPHESY/assets/7929598/922d2029-bf4a-4e09-a0fe-ba0e49110183)
 
+![o1s_spectra](https://github.com/matthewozon/PROPHESY/assets/7929598/452239c7-8b6b-4624-a984-673436f6e6d2)
 
 
 
@@ -62,7 +62,8 @@ On linux systems, the startup file is likely found at `~/.julia/config/startup.j
 
 
 ## Alignment parameter estimation
-![APE](https://github.com/Center-for-Atmospheric-Research-ATMOS/PROPHESY/assets/7929598/b3ccbf74-ff9d-4b15-96e9-ed8901ac76eb)
+![APE](https://github.com/matthewozon/PROPHESY/assets/7929598/1ba74f07-ca5f-4859-a512-66c35fb88d89)
+
 
 Alignment parameter simulation and estimation
 
@@ -74,7 +75,8 @@ Alignment parameter simulation and estimation
 
 
 ## Sample emission model
-![emission_model](https://github.com/Center-for-Atmospheric-Research-ATMOS/PROPHESY/assets/7929598/3a0a99d6-b83f-43e1-9665-7f71aab72368)
+
+![emission_model](https://github.com/matthewozon/PROPHESY/assets/7929598/5204af9d-a573-45ed-80e6-941b5f16c7ad)
 
 Geometry factor for a cylindrical sample [13]
 
@@ -85,7 +87,9 @@ Geometry factor for a cylindrical sample [13]
 
 
 ## Depth profile reconstruction
-![estimates_and_uncertainties_W10_model_err_smooth_edge_global_0003](https://github.com/Center-for-Atmospheric-Research-ATMOS/PROPHESY/assets/7929598/62651064-44a8-4b96-9dce-f2e85dc8396e)
+![estimates_and_uncertainties_W10_model_err_smooth_edge_global_0003](https://github.com/matthewozon/PROPHESY/assets/7929598/ee14042a-b0c2-45fb-b966-25981f32d5ff)
+
+
 
 Profile reconstruction in the case of $W_{10}$ for three levels of global attenuation length uncertainty [13]
 
@@ -105,5 +109,9 @@ Profile reconstruction in the case of $W_{10}$ for three levels of global attenu
 - [11] S. Thürmer, R. Seidel, M. Faubel, W. Eberhardt, J. C. Hemminger, S. E. Bradforth and B. Winter, Photoelectron angular distributions from liquid water: Effects of electron scattering Physical review letters, Physical review letters, 2013, Vol. 111, p. 173005 ([DOI: 10.1103/PhysRevLett.111.173005](https://www.doi.org/10.1103/PhysRevLett.111.173005))
 - [12] M. Ozon, K. Tumashevich and N. L. Prisle, Quantitative alignment parameter estimation for analyzing X-ray photoelectron spectra, Journal of Synchrotron Radiation, 2023, Vol. 30, p. 766-779 ([DOI: 
 10.1107/S1600577523004150](https://www.doi.org/10.1107/S1600577523004150))
-- [13] M. Ozon, K. Tumashevich, J. J. Lin and N. L. Prisle,  Inversion model for extracting chemically resolved depth profiles across liquid interfaces of various configurations from XPS data: PROPHESY, 2023, Vol. 30, p. - ([DOI: 10.1107/S1600577523006124](https://www.doi.org/10.1107/S1600577523006124))
+- [13] M. Ozon, K. Tumashevich, J. J. Lin and N. L. Prisle,  Inversion model for extracting chemically resolved depth profiles across liquid interfaces of various configurations from XPS data: PROPHESY, 2023, Vol. 30, p. 941-961 ([DOI: 10.1107/S1600577523006124](https://www.doi.org/10.1107/S1600577523006124))
+- [14] B. Mølgaard, J. Vanhatalo, P. P. Aalto, N. L. Prisle, and K. Hämeri, Notably improved inversion of differential mobility particle sizer data obtained under conditions of fluctuating particle number concentrations, 2016, 9(2), p. 741–751 [DOI: 10.5194/amt-9-741-2016](https://doi.org/10.5194/amt-9-741-2016)
+- [15] D. Stolzenburg, M. Ozon, M. Kulmala, K. Lehtinen, K. Lehtipalo, J. Kangasluoma, Combining instrument inversions for sub-10 nm aerosol number size-distribution measurements, 2022, 159, 105862 [DOI: 10.1016/j.jaerosci.2021.105862](https://doi.org/10.1016/j.jaerosci.2021.105862)
+- [16] M. Ozon, D. Stolzenburg, L. Dada, A. Seppänen, K. Lehtinen, Aerosol formation and growth rates from chamber experiments using Kalman smoothing, 2021, 21, p. 12595-12611. [DOI: 10.5194/acp-21-12595-2021](https://doi.org/10.5194/acp-21-12595-2021)
+
 
