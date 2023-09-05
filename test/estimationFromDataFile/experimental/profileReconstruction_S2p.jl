@@ -53,8 +53,8 @@ Hnot1 = sum(Hnot;dims=2);
 
 
 # data correction
-Δy = dropdims(sum(Hb,dims=2),dims=2)*ρC1s_bulk/ρC1s_bulk; # in the bulk (deeper than 5 nm) if the data are normalized by the bulk concentration, then the normalized concentration in the bulk is 1, otherwise ρB
-δy = dropdims(sum(H0,dims=2),dims=2)*ρC1s_out/ρC1s_bulk;                          # outside the sample the concentration is nearly 0
+Δy = dropdims(sum(Hb,dims=2),dims=2)*ρS2p_bulk/ρS2p_bulk; # in the bulk (deeper than 5 nm) if the data are normalized by the bulk concentration, then the normalized concentration in the bulk is 1, otherwise ρB
+δy = dropdims(sum(H0,dims=2),dims=2)*ρS2p_out/ρS2p_bulk;                          # outside the sample the concentration is nearly 0
 y_tilde  = y_data_1-(Δy+δy);          # total correction
 
 
@@ -68,8 +68,8 @@ D0 = DN[:,end-1:end];
 
 
 # correction of the regularization "data"
-Δyd = -dropdims(sum(Db,dims=2),dims=2)*ρC1s_bulk/ρC1s_bulk;
-δyd = -dropdims(sum(D0,dims=2),dims=2)*ρC1s_out/ρC1s_bulk;
+Δyd = -dropdims(sum(Db,dims=2),dims=2)*ρS2p_bulk/ρS2p_bulk;
+δyd = -dropdims(sum(D0,dims=2),dims=2)*ρS2p_out/ρS2p_bulk;
 yd  = Δyd+δyd;
 
 
@@ -77,47 +77,6 @@ yd  = Δyd+δyd;
 Htrunc = [H_tilde; D_tilde];                                     # conditional to data and measurement model
 
 
-if false
-    # deeper than some distance, the signal is not likely to be disantangled
-    # d0 = 19.5e-3 # [μm] maximum depth # sharp edge 
-    # d0 = 5.0e-3 # [μm] maximum depth smooth edge
-    N0 = findlast(r.-μ0.<=-d0); # bulk
-    N = Nr-N0;
-
-    # slice the model (3 terms: boundary, surface and bulk)
-    H0 = H_geom[:,end]; # boundary
-    H_tilde = H_geom[:,N0:end-1];
-    Hb = H_geom[:,1:N0-1]; # bulk
-    Hnot = [Hb H0];
-    Hnot1 = sum(Hnot;dims=2);
-
-
-    # data correction
-    Δy = dropdims(sum(Hb,dims=2),dims=2)*ρC1s_bulk/ρC1s_bulk; # in the bulk (deeper than 5 nm) if the data are normalized by the bulk concentration, then the normalized concentration in the bulk is 1, otherwise ρB
-    # if FLAG_0004
-    #     Δy = 0.0*Δy
-    # end
-    δy = H0*ρC1s_out/ρC1s_bulk;                          # outside the sample the concentration is nearly 0
-    y_tilde  = y_data_1-(Δy+δy);          # total correction
-
-
-
-    # regularization (smoothness: applied as sparsity in the second order difference)
-    DN = D2nd(N+3);
-    D0 = DN[:,end];
-    D_tilde = DN[:,3:end-1];
-    Db = DN[:,1:2];
-
-    # correction of the regularization "data"
-    Δyd = -dropdims(sum(Db,dims=2),dims=2)*ρC1s_bulk/ρC1s_bulk; # if data not normalized by bulk concentration, multiply by ρB
-
-    δyd = -D0*ρC1s_out/ρC1s_bulk;
-    yd = Δyd+δyd;
-
-
-    # smoosh together the several part of the model into augmented operators
-    Htrunc = [H_tilde; D_tilde];                                     # conditional to data and measurement model
-end 
 
 #
 # covariances: the crafed Bayesian models assumes that some covariance are known, i.e. measurement noise, smoothness, known values and measurement operator (the last only in the marginalized case)
@@ -137,11 +96,9 @@ for i in 1:Nr
         Γprior[j,i] = Γprior[i,j];
     end
 end
-if false
-    Γd = (N/Ndata)*(σd^2)*Γprior[N0-1:end-1,N0-1:end-1];  # scale the a priori strength with the quantity of data, so that it is possible to compare the results
-else
-    Γd = (N_trunc/Ndata)*(σd^2)*Γprior[N0-1:NB+1,N0-1:NB+1]
-end
+
+Γd = (N_trunc/Ndata)*(σd^2)*Γprior[N0-1:NB+1,N0-1:NB+1]
+
 Γd_inv = inv(Γd);
 N = N_trunc
 
@@ -163,8 +120,8 @@ r_y_tol_un=r_y_tol;
 
 ρ_est,_,N_last = alg2_cp_quad_LM(x00,y_tilde,yd,Htrunc,ΓItrunc,Γd,W_stop;τ0=τ0,Niter=N_max_iter,r_n_tol=r_n_tol,r_y_tol=r_y_tol);
 
-# ρ_cp = [(ρC1s_bulk/ρC1s_bulk)*ones(Cdouble,N0-1); ρ_est; ρC1s_out/ρC1s_bulk];
-ρ_cp = [(ρC1s_bulk/ρC1s_bulk)*ones(Cdouble,N0-1); ρ_est; (ρC1s_out/ρC1s_bulk)*ones(Cdouble,Nr-NB)];
+# ρ_cp = [(ρS2p_bulk/ρS2p_bulk)*ones(Cdouble,N0-1); ρ_est; ρS2p_out/ρS2p_bulk];
+ρ_cp = [(ρS2p_bulk/ρS2p_bulk)*ones(Cdouble,N0-1); ρ_est; (ρS2p_out/ρS2p_bulk)*ones(Cdouble,Nr-NB)];
 
 
 ##

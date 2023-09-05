@@ -36,7 +36,7 @@ PLOT_DATA = false
 
 # folders where the data files are
 data_folder = "../../../data/TK/";
-data_folderC1s = string(data_folder,"C1s/")
+data_folderS2p = string(data_folder,"S2p/")
 
 # flags
 FLAG_PLOT = true;
@@ -99,21 +99,20 @@ sortBy     = Symbol("Photon energy")      # column name for the photon energy  (
 thenSortBy = Symbol("Binding energy")     # colmun name for the binding energy (for the data sharing the same photon energy, sort them by binding energy)
 
 
-# alignement from C1s data
-include("loadDataAndAlignment.jl")
+# alignement from S2p data
+include("loadDataAndAlignment_S2p.jl")
 
 # now, you can run the inversion with the data
 
 y_data_1 # SNR OK
 y_data_2 # SNR OK ish
-y_data_3 # SNR... well, there's no need to try this one
 σ_noise  # standard deviation of the normalized noise
 
 
 ##
 ## run the inversion using only y_data_1
 ##
-include("profileReconstruction.jl")
+include("profileReconstruction_S2p.jl")
 
 ##
 ## plot the results
@@ -121,10 +120,10 @@ include("profileReconstruction.jl")
 if PLOT_FIG
     figure(figsize=[10, 5])
     ax1 = subplot(121)
-    l_ρ, = plot(1.0e3*(r.-μ0),ρC1s_bulk*ρ_cp,color=color_array[1])
+    l_ρ, = plot(1.0e3*(r.-μ0),ρS2p_bulk*ρ_cp,color=color_array[1])
     if SAMPLING
-        # l_ρ_std =  fill_between(1.0e3*(r[N0:end-1].-μ0),ρC1s_bulk*(ρ_est-stdρ_HI),ρC1s_bulk*(ρ_est+stdρ_HI),alpha=0.5,color=color_array[1])
-        l_ρ_std =  fill_between(1.0e3*(r[N0:NB].-μ0),ρC1s_bulk*(ρ_est-stdρ_HI),ρC1s_bulk*(ρ_est+stdρ_HI),alpha=0.5,color=color_array[1])
+        # l_ρ_std =  fill_between(1.0e3*(r[N0:end-1].-μ0),ρS2p_bulk*(ρ_est-stdρ_HI),ρS2p_bulk*(ρ_est+stdρ_HI),alpha=0.5,color=color_array[1])
+        l_ρ_std =  fill_between(1.0e3*(r[N0:NB].-μ0),ρS2p_bulk*(ρ_est-stdρ_HI),ρS2p_bulk*(ρ_est+stdρ_HI),alpha=0.5,color=color_array[1])
     end
     l_λ = Array{PyObject,1}(undef,Ndata)
     for i in 1:Ndata
@@ -133,9 +132,9 @@ if PLOT_FIG
     # l_s, = plot(-[0.0; 0.0],[0.0; 1.0], color=color_array[Ndata+2]) # ;"sharp edge surface"
     # xlim(1.0e3*(r[1].-μ0),2.5e3*(r[end].-μ0))
     xlim(-d0*1.0e3,dboundary*1.0e3)
-    ylim(-0.01ρC1s_bulk,max(1.6ρC1s_bulk,1.1maximum(ρC1s_bulk*(ρ_est+stdρ_HI))))
+    ylim(-0.01ρS2p_bulk,max(1.6ρS2p_bulk,1.1maximum(ρS2p_bulk*(ρ_est+stdρ_HI))))
     xlabel("depth [nm]",fontsize=14); 
-    ylabel("C1s molar concentration [M]",fontsize=14) 
+    ylabel("S2p molar concentration [M]",fontsize=14) 
     xticks(fontsize=14); yticks(fontsize=14); 
     # ax1 = gca()
     ax1.ticklabel_format(axis="y",style="sci",scilimits=(-1,1),useOffset=true)
@@ -145,8 +144,8 @@ if PLOT_FIG
     legend([(l_ρ,l_ρ_std);l_λ],["estimates\$\\pm\\sigma\$ [M]"; string.("\$\\lambda_e\$ = ",floor.(100λ_all)/100," [nm]")],fontsize=12,borderpad=0.4,borderaxespad=0.2,handletextpad=0.5,handlelength=1.0,framealpha=0.4)
 
     ax2 = subplot(122)
-    scatter(λ_all,ρC1s_bulk*y_data_1)
-    ylim(0.9ρC1s_bulk*minimum(y_data_1),1.1ρC1s_bulk*maximum(y_data_1))
+    scatter(λ_all,ρS2p_bulk*y_data_1)
+    ylim(0.9ρS2p_bulk*minimum(y_data_1),1.1ρS2p_bulk*maximum(y_data_1))
     xlabel("IMFP [nm]",fontsize=14); 
     ylabel("peak area [mol]",fontsize=14)
     xticks(fontsize=14); yticks(fontsize=14); 
@@ -158,11 +157,11 @@ if PLOT_FIG
 
     tight_layout(pad=0.2, w_pad=0.2, h_pad=0.2)
     ax1.text(-0.1, 0.97, "a)", transform=ax1.transAxes,fontsize=16)
-    ax2.text(0.05, 0.1+0.75, replace(data_filesC1s[idx_file][1:end-5],"_"=>" "), transform=ax2.transAxes,fontsize=16)
+    ax2.text(0.05, 0.1+0.75, replace(data_filesS2p[idx_file][1:end-5],"_"=>" "), transform=ax2.transAxes,fontsize=16)
     ax2.text(-0.1, 0.97, "b)", transform=ax2.transAxes,fontsize=16)
 
-    savefig(string(data_filesC1s[idx_file][1:end-5],"_reconstruction_and_data_smooth_edge.png"))
-    savefig(string(data_filesC1s[idx_file][1:end-5],"_reconstruction_and_data_smooth_edge.pdf"))
+    savefig(string(data_filesS2p[idx_file][1:end-5],"_reconstruction_and_data_smooth_edge.png"))
+    savefig(string(data_filesS2p[idx_file][1:end-5],"_reconstruction_and_data_smooth_edge.pdf"))
 
     if SAMPLING
         figure()
