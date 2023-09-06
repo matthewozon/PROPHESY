@@ -6,7 +6,7 @@ data_filesC1s = folder_content[list_match.!=nothing]
 # go through the list of file and load the data and compute the alignment parameter
 α_noiseC1s = Dict();
 α_ratioC1s = Dict();
-for idx_file in 1:length(data_filesC1s)
+for idx_file in 1:eachindex(data_filesC1s)
     fileName = data_filesC1s[idx_file][1:end-5];
     ρC1s_bulk = 1.0e-3parse(Cdouble,match(r"SDS_[0-9]*mM",fileName).match[5:end-2]); # extract concentration in mM
     dictAllData,df_fit,Ndata = dataAndFit_xlsx2df_missing(string(data_folderC1s,fileName,".xlsx"); regData=regData, regFit=regFit, regEph=regEph, sortBy=sortBy, thenSortBy=thenSortBy);

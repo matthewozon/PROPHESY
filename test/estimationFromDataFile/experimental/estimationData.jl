@@ -31,12 +31,19 @@ if SAMPLING
     using XPSsampling
 end
 
+SAVE_DATA = true
+if SAVE_DATA
+    using XLSX
+end
 PLOT_FIG  = true
 PLOT_DATA = false
 
 # folders where the data files are
-data_folder = "../../../data/TK/";
+data_folder = "../../../data/TK2/";
 data_folderC1s = string(data_folder,"C1s/")
+
+FLAG_CC = false
+FLAG_COSO3 = !FLAG_CC
 
 # flags
 FLAG_PLOT = true;
@@ -44,18 +51,31 @@ FLAG_SAVE_PLOT = false;
 
 # geometry setup
 λe0 = 2.0e-3;         # reference penetration depth in μm
-δr = 2.0e-3           # transition to vacuum layer thickness (let's set about 1 nm)
+δr = 2.5e-3           # transition to vacuum layer thickness 
 k0 = 10;              # compute the measurement model over a distance of k0*λe0
-Nr = 101; # 201;      # number of discretization points in the radial dimension
+Nr = 101; # 201; #    # number of discretization points in the radial dimension
 Nθ = 256;             # number of discretization points in the polar angle dimension
 Ny = 256;             # number of discretization points in the cylinder axis dimension
 L  = 50.0;            # height of the irradiated sample (the vertical extent of the beam is more like 20μm instead of 100μm)
 μ0 = 10.0;            # radius of the cylinder
-x0 = sqrt(2.0)*5000.0 # (x0,y0,z0) are the coordinates of the analyzer's apperture
+x0 = sqrt(3.0)*5000.0 # (x0,y0,z0) are the coordinates of the analyzer's apperture
 y0 = 0.0;
 z0 = 5000.0;
+# smooth edge parameters
+Δr_water = 0.25e-3
+κ_transition = 5.0
 
 
+
+
+# make sure that δr>dboundary;
+# bulk depth and boundary distance
+d0 = 2.0*1.92e-3-Δr_water;
+dboundary = 1.92e-3+Δr_water;
+
+if (δr<=dboundary)
+    δr = dboundary
+end
 
 
 
@@ -65,10 +85,21 @@ r = collect(range(μ0-k0*λe0,μ0+δr,length=Nr));
 θ = collect(range(θ0-π/2.0,θ0+π/2.0,Nθ));
 y = collect(range(-L/2.0,L/2.0,length=Ny));
 
+# smooth edge cut 
+N0 = findlast(r.-μ0.<=-d0); # bulk
+NB = findlast(r.-μ0.<=dboundary); # boundary
+N_trunc = NB-N0+1;
 
-# smooth edge parameters
-Δr_water = 0.25e-3
-κ_transition = 5.0
+# standard deviation of the known values
+σB     = 0.1;        
+
+# standard deviation of the smoothness a priori
+σd     = 1.0 # 0.1
+cor_len_lowres = 2.5;
+
+# amplitude of the communication mecanism for sampling the a posteriori model
+σw     = 5.0e-3  # only used for sampling
+
 
 
 
@@ -124,17 +155,23 @@ if PLOT_FIG
     l_ρ, = plot(1.0e3*(r.-μ0),ρC1s_bulk*ρ_cp,color=color_array[1])
     if SAMPLING
         # l_ρ_std =  fill_between(1.0e3*(r[N0:end-1].-μ0),ρC1s_bulk*(ρ_est-stdρ_HI),ρC1s_bulk*(ρ_est+stdρ_HI),alpha=0.5,color=color_array[1])
-        l_ρ_std =  fill_between(1.0e3*(r[N0:NB].-μ0),ρC1s_bulk*(ρ_est-stdρ_HI),ρC1s_bulk*(ρ_est+stdρ_HI),alpha=0.5,color=color_array[1])
+        # l_ρ_std =  fill_between(1.0e3*(r[N0:NB].-μ0),ρC1s_bulk*(ρ_est-stdρ_HI),ρC1s_bulk*(ρ_est+stdρ_HI),alpha=0.5,color=color_array[1])
+        σρ_est = [σB*ones(Cdouble,N0-1); stdρ_HI; σB*ones(Cdouble,Nr-NB)]
+        μρ_est = ρ_cp[:];
+        l_ρ_std =  fill_between(1.0e3*(r.-μ0),ρC1s_bulk*(μρ_est-σρ_est),ρC1s_bulk*(μρ_est+σρ_est),alpha=0.5,color=color_array[1])
     end
     l_λ = Array{PyObject,1}(undef,Ndata)
     for i in 1:Ndata
         l_λ[i], = plot(-[λ_all[i]; λ_all[i]],[0.0; 1.0], color=color_array[i+1])
     end
+    l_stoi, = plot(1.0e3*(r.-μ0),ρC1s_bulk*MINOTAUR.f_logistic.(r,μ0,Δr_water;A=1.0), color=color_array[6])
     # l_s, = plot(-[0.0; 0.0],[0.0; 1.0], color=color_array[Ndata+2]) # ;"sharp edge surface"
     # xlim(1.0e3*(r[1].-μ0),2.5e3*(r[end].-μ0))
-    xlim(-d0*1.0e3,dboundary*1.0e3)
+    # xlim(-d0*1.0e3,dboundary*1.0e3)
+    # xlim(-1.1maximum([d0*1.0e3; λ_all]),1.0e3δr)
+    xlim(-1.1maximum([d0*1.0e3; λ_all; 5.0]),1.0e3δr)
     ylim(-0.01ρC1s_bulk,max(1.6ρC1s_bulk,1.1maximum(ρC1s_bulk*(ρ_est+stdρ_HI))))
-    xlabel("depth [nm]",fontsize=14); 
+    xlabel("distance [nm]",fontsize=14); 
     ylabel("C1s molar concentration [M]",fontsize=14) 
     xticks(fontsize=14); yticks(fontsize=14); 
     # ax1 = gca()
@@ -142,27 +179,54 @@ if PLOT_FIG
     ax1.yaxis.offsetText.set_size(14)
     ax1.xaxis.offsetText.set_size(14)
     # legend(fontsize=12)
-    legend([(l_ρ,l_ρ_std);l_λ],["estimates\$\\pm\\sigma\$ [M]"; string.("\$\\lambda_e\$ = ",floor.(100λ_all)/100," [nm]")],fontsize=12,borderpad=0.4,borderaxespad=0.2,handletextpad=0.5,handlelength=1.0,framealpha=0.4)
+    legend([(l_ρ,l_ρ_std);l_λ;l_stoi],["estimates\$\\pm\\sigma\$ [M]"; string.("\$\\lambda_e\$ = ",floor.(100λ_all)/100," [nm]");"stoichiometric profile"],fontsize=12,borderpad=0.4,borderaxespad=0.2,handletextpad=0.5,handlelength=1.0,framealpha=0.4)
 
     ax2 = subplot(122)
-    scatter(λ_all,ρC1s_bulk*y_data_1)
-    ylim(0.9ρC1s_bulk*minimum(y_data_1),1.1ρC1s_bulk*maximum(y_data_1))
-    xlabel("IMFP [nm]",fontsize=14); 
-    ylabel("peak area [mol]",fontsize=14)
-    xticks(fontsize=14); yticks(fontsize=14); 
-    ax2.ticklabel_format(axis="y",style="sci",scilimits=(-1,1),useOffset=true)
-    ax2.yaxis.offsetText.set_size(14)
-    ax2.xaxis.offsetText.set_size(14)
-    legend(["data"],fontsize=12,borderpad=0.4,borderaxespad=0.2,handletextpad=0.5,handlelength=1.0,framealpha=0.4)
-    
+    if false
+        scatter(λ_all,ρC1s_bulk*y_data_1)
+        ylim(0.9ρC1s_bulk*minimum(y_data_1),1.1ρC1s_bulk*maximum(y_data_1))
+        xlabel("IMFP [nm]",fontsize=14); 
+        ylabel("peak area [mol]",fontsize=14)
+        xticks(fontsize=14); yticks(fontsize=14); 
+        ax2.ticklabel_format(axis="y",style="sci",scilimits=(-1,1),useOffset=true)
+        ax2.yaxis.offsetText.set_size(14)
+        ax2.xaxis.offsetText.set_size(14)
+        legend(["data"],fontsize=12,borderpad=0.4,borderaxespad=0.2,handletextpad=0.5,handlelength=1.0,framealpha=0.4)
+    else
+        ρ_solvent = MINOTAUR.f_logistic.(r,μ0,Δr_water;A=1.0)
+        # l_excess, = plot(1.0e3*(r[1:NB].-μ0),ρ_cp[1:NB]./ρ_solvent[1:NB],color=color_array[1])
+        l_excess, = plot(1.0e3*(r.-μ0),ρ_cp./ρ_solvent,color=color_array[1])
+        if SAMPLING
+            # σρ_est = [σB*ones(Cdouble,N0-1); stdρ_HI; σB*ones(Cdouble,Nr-NB)]./ρ_solvent
+            # μρ_est = ρ_cp./ρ_solvent;
+            l_excess_std =  fill_between(1.0e3*(r.-μ0),(μρ_est-σρ_est)./ρ_solvent,(μρ_est+σρ_est)./ρ_solvent,alpha=0.5,color=color_array[1])
+            # l_excess_std =  fill_between(1.0e3*(r[1:NB].-μ0),(μρ_est[1:NB]-σρ_est[1:NB])./ρ_solvent[1:NB],(μρ_est[1:NB]+σρ_est[1:NB])./ρ_solvent[1:NB],alpha=0.5,color=color_array[1])
+        end
+        xlim(-1.1maximum([d0*1.0e3; λ_all; 5.0]),1.0e3δr)
+        # ylim(-1.0,400.0)
+        ylim(-1.0,800.0)
+        xlabel("distance [nm]",fontsize=14); 
+        ylabel("C1s relative excess",fontsize=14) 
+        xticks(fontsize=14); yticks(fontsize=14); 
+        # ax1 = gca()
+        ax1.ticklabel_format(axis="y",style="sci",scilimits=(-1,1),useOffset=true)
+        ax1.yaxis.offsetText.set_size(14)
+        ax1.xaxis.offsetText.set_size(14)
+        legend([(l_excess,l_excess_std)],["estimated excess\$\\pm\\sigma\$"],fontsize=12,borderpad=0.4,borderaxespad=0.2,handletextpad=0.5,handlelength=1.0,framealpha=0.4)
+    end
 
     tight_layout(pad=0.2, w_pad=0.2, h_pad=0.2)
     ax1.text(-0.1, 0.97, "a)", transform=ax1.transAxes,fontsize=16)
     ax2.text(0.05, 0.1+0.75, replace(data_filesC1s[idx_file][1:end-5],"_"=>" "), transform=ax2.transAxes,fontsize=16)
     ax2.text(-0.1, 0.97, "b)", transform=ax2.transAxes,fontsize=16)
 
-    savefig(string(data_filesC1s[idx_file][1:end-5],"_reconstruction_and_data_smooth_edge.png"))
-    savefig(string(data_filesC1s[idx_file][1:end-5],"_reconstruction_and_data_smooth_edge.pdf"))
+    if FLAG_CC
+        savefig(string(data_filesC1s[idx_file][1:end-5],"_reconstruction_and_data_smooth_edge_CC.png"))
+        savefig(string(data_filesC1s[idx_file][1:end-5],"_reconstruction_and_data_smooth_edge_CC.pdf"))
+    else
+        savefig(string(data_filesC1s[idx_file][1:end-5],"_reconstruction_and_data_smooth_edge_COSO3.png"))
+        savefig(string(data_filesC1s[idx_file][1:end-5],"_reconstruction_and_data_smooth_edge_COSO3.pdf"))
+    end
 
     if SAMPLING
         figure()
@@ -170,3 +234,25 @@ if PLOT_FIG
     end
 end
 
+if SAVE_DATA
+    # estimate the alignment parameter using the estimated concentration profile 
+    α_al_noise_est = zeros(Cdouble,Ndata);
+    for i in 1:Ndata
+        local plot_sym = Symbol(string("hν_",df_Eph[!,photon_sym][i]));
+        local Be       = collect(skipmissing(dictAllData[plot_sym].Wavelength));
+        local dKe      = median(abs.(Be[2:end]-Be[1:end-1]))
+        local σ_all = collect(skipmissing(dictAllData[plot_sym].Curve1.+dictAllData[plot_sym].Curve2.+dictAllData[plot_sym].Curve3)); # C1s
+        σ_all = σ_all/(dKe*sum(σ_all));
+        local Sbg                = collect(skipmissing(dictAllData[plot_sym].Background));
+        local S_noisy            = collect(skipmissing(dictAllData[plot_sym].Raw_spectrum));
+        α_al_noise_est[i],_    = noiseAndParameterEstimation(σ_all,H_geom[i,:],S_noisy,Sbg,ρC1s_bulk*ρ_cp)
+        α_al_noise_est[i]      = α_al_noise_est[i]/(κ_units*σ_C1s_exp(convert(Cdouble,df_Eph[!,photon_sym][i]))*dictPeak[plot_sym][!,ph_flu_sym][1])
+    end
+    figure()
+    # scatter(1.0e8α_al_noise,1.0e8(α_al_noise_est-α_al_noise))
+    scatter(1.0e8α_al_noise,100*(α_al_noise_est-α_al_noise)./α_al_noise)
+    xlabel("\$\\alpha_{\\mathrm{stoichiometric}}\$ [cm\$^{-2}\$]")
+    ylabel("relative variation [\\%]")
+
+    include("save_data.jl")
+end
