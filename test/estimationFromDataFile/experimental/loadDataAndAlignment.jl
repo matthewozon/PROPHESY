@@ -14,7 +14,11 @@ idx_file = 1; # BS: not enough data (3 data points, do not use for profile recon
 fileName = data_filesC1s[idx_file][1:end-5];
 
 ρC1s_out  = 0.0                                                                  # [M] concentration of C 1s outside of the sharp edge volume (at the outter boundary)
-NC1s_per_SDS = 12.0
+if FLAG_CC
+    NC1s_per_SDS = 11.0
+else
+    NC1s_per_SDS = 1.0
+end
 ρC1s_bulk = NC1s_per_SDS*1.0e-3parse(Cdouble,match(r"SDS_[0-9]*mM",fileName).match[5:end-2]); # [M] bulk concentration of C 1s
 
 # dictAllData,df_fit,Ndata = dataAndFit_xlsx2df(string(data_folderC1s,fileName,".xlsx");         regData=regData, regFit=regFit, regEph=regEph, sortBy=sortBy, thenSortBy=thenSortBy);
@@ -119,12 +123,12 @@ P3 = y_data_3./(y_data_1+y_data_2+y_data_3);
 P_CC    = P1+P2;
 P_COSO3 = P3;
 
-y_data_1 = y_data_1./P1
-y_data_2 = y_data_2./P2
-y_data_3 = y_data_3./P3
+# y_data_1 = y_data_1./P1
+# y_data_2 = y_data_2./P2
+# y_data_3 = y_data_3./P3
 
-y_CC = y_CC./P_CC;
-y_COSO3 = y_COSO3./P_COSO3;
+# y_CC = y_CC./P_CC;
+# y_COSO3 = y_COSO3./P_COSO3;
 
 # SNR_1 = (y_data_1./σ_noise).^2;
 # SNR_2 = (y_data_2./σ_noise).^2;

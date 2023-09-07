@@ -1,11 +1,9 @@
-# load simulated data, and fit the peaks, estimate the alignment factor, remove the noise and estimate the sensitivity matrices
 ## load the packages used in the estimation
 # plotting
 using PyPlot
 using PyCall
 rc("text", usetex=true)
 rc("figure",max_open_warning=50)
-# using myPlot
 color_array = ["tab:blue"; "tab:orange"; "tab:green"; "tab:red"; "tab:purple"; "tab:brown"; "tab:pink"; "tab:gray"; "tab:olive"; "tab:cyan"; "magenta"; "yellow"; "hotpink"; "darkmagenta"; "chartreuse"; "deepskyblue"; "navy"; "darkcyan"; "crimson"; "firebrick"]; 
 
 # data manipulation (loading, writing, etc)
@@ -25,18 +23,20 @@ using MINOTAUR
 
 # inversion package
 using XPSinv
+using XPSsampling
 
-SAMPLING = true
-if SAMPLING
-    using XPSsampling
+
+SAVE_DATA = true
+if SAVE_DATA
+    using XLSX
 end
-
 PLOT_FIG  = true
 PLOT_DATA = false
 
 # folders where the data files are
-data_folder = "../../../data/TK/";
+data_folder = "../../../data/TK2/";
 data_folderS2p = string(data_folder,"S2p/")
+
 
 # flags
 FLAG_PLOT = true;
@@ -44,18 +44,32 @@ FLAG_SAVE_PLOT = false;
 
 # geometry setup
 λe0 = 2.0e-3;         # reference penetration depth in μm
-δr = 2.0e-3           # transition to vacuum layer thickness (let's set about 1 nm)
+δr = 2.5e-3           # transition to vacuum layer thickness 
 k0 = 10;              # compute the measurement model over a distance of k0*λe0
-Nr = 101; # 201;      # number of discretization points in the radial dimension
+Nr = 101; # 201; #    # number of discretization points in the radial dimension
 Nθ = 256;             # number of discretization points in the polar angle dimension
 Ny = 256;             # number of discretization points in the cylinder axis dimension
 L  = 50.0;            # height of the irradiated sample (the vertical extent of the beam is more like 20μm instead of 100μm)
 μ0 = 10.0;            # radius of the cylinder
-x0 = sqrt(2.0)*5000.0 # (x0,y0,z0) are the coordinates of the analyzer's apperture
+x0 = sqrt(3.0)*5000.0 # (x0,y0,z0) are the coordinates of the analyzer's apperture
 y0 = 0.0;
 z0 = 5000.0;
+# smooth edge parameters
+Δr_water = 0.25e-3
+κ_transition = 5.0
 
 
+
+
+# make sure that δr>dboundary;
+# bulk depth and boundary distance
+d0 = 2.0*1.92e-3-Δr_water;    # bulk
+d0 = 10.0*1.92e-3-Δr_water;    # bulk
+dboundary = 1.92e-3+Δr_water; # boundary 
+
+if (δr<=dboundary)
+    δr = dboundary
+end
 
 
 
@@ -65,12 +79,31 @@ r = collect(range(μ0-k0*λe0,μ0+δr,length=Nr));
 θ = collect(range(θ0-π/2.0,θ0+π/2.0,Nθ));
 y = collect(range(-L/2.0,L/2.0,length=Ny));
 
+# smooth edge cut 
+N0 = findlast(r.-μ0.<=-d0); # bulk
+NB = findlast(r.-μ0.<=dboundary); # boundary
+N_trunc = NB-N0+1;
 
-# smooth edge parameters
-Δr_water = 0.25e-3
-κ_transition = 5.0
+# standard deviation of the known values
+σB     = 0.1;        
 
+# standard deviation of the smoothness a priori
+σd     = 0.5 # 1.0 # 0.1
+cor_len_lowres = 2.5;
 
+# amplitude of the communication mecanism for sampling the a posteriori model
+σw     = 0.5e-2
+cor_len_sampling = N_trunc/5;
+Ns      = 1000000;
+Ns_burn =  100000;
+
+# optimization 
+τ0 = 1.0e1 # 
+N_max_iter = 200000# 0#00; 
+r_n_tol=0.000001; # 0.001
+r_y_tol=0.000001; # 0.001
+W_stop = collect(LinRange(1.0,10.0,N_trunc));
+x00 = collect(LinRange(1.0,0.0,N_trunc))
 
 
 # unit conversion constant (some of the quantities are in μm, some in L and some in Mbarn)
@@ -100,13 +133,15 @@ thenSortBy = Symbol("Binding energy")     # colmun name for the binding energy (
 
 
 # alignement from S2p data
-include("loadDataAndAlignment_S2p.jl")
+dt_load = @elapsed include("loadDataAndAlignment_S2p.jl")
+println("Loading and computing the measurement models: ",dt_load," s")
 
 # now, you can run the inversion with the data
 
-y_data_1 # SNR OK
-y_data_2 # SNR OK ish
-σ_noise  # standard deviation of the normalized noise
+# y_data_1 # SNR OK
+# y_data_2 # SNR OK ish
+# y_data_3 # SNR... well, there's no need to try this one
+# σ_noise  # standard deviation of the normalized noise
 
 
 ##
@@ -121,19 +156,21 @@ if PLOT_FIG
     figure(figsize=[10, 5])
     ax1 = subplot(121)
     l_ρ, = plot(1.0e3*(r.-μ0),ρS2p_bulk*ρ_cp,color=color_array[1])
-    if SAMPLING
-        # l_ρ_std =  fill_between(1.0e3*(r[N0:end-1].-μ0),ρS2p_bulk*(ρ_est-stdρ_HI),ρS2p_bulk*(ρ_est+stdρ_HI),alpha=0.5,color=color_array[1])
-        l_ρ_std =  fill_between(1.0e3*(r[N0:NB].-μ0),ρS2p_bulk*(ρ_est-stdρ_HI),ρS2p_bulk*(ρ_est+stdρ_HI),alpha=0.5,color=color_array[1])
-    end
+    σρ_est = [σB*ones(Cdouble,N0-1); stdρ_HI; σB*ones(Cdouble,Nr-NB)]
+    μρ_est = ρ_cp[:];
+    l_ρ_std =  fill_between(1.0e3*(r.-μ0),ρS2p_bulk*(μρ_est-σρ_est),ρS2p_bulk*(μρ_est+σρ_est),alpha=0.5,color=color_array[1])
     l_λ = Array{PyObject,1}(undef,Ndata)
     for i in 1:Ndata
         l_λ[i], = plot(-[λ_all[i]; λ_all[i]],[0.0; 1.0], color=color_array[i+1])
     end
+    l_stoi, = plot(1.0e3*(r.-μ0),ρS2p_bulk*MINOTAUR.f_logistic.(r,μ0,Δr_water;A=1.0), color=color_array[6])
     # l_s, = plot(-[0.0; 0.0],[0.0; 1.0], color=color_array[Ndata+2]) # ;"sharp edge surface"
     # xlim(1.0e3*(r[1].-μ0),2.5e3*(r[end].-μ0))
-    xlim(-d0*1.0e3,dboundary*1.0e3)
+    # xlim(-d0*1.0e3,dboundary*1.0e3)
+    # xlim(-1.1maximum([d0*1.0e3; λ_all]),1.0e3δr)
+    xlim(-1.1maximum([d0*1.0e3; λ_all; 5.0]),1.0e3δr)
     ylim(-0.01ρS2p_bulk,max(1.6ρS2p_bulk,1.1maximum(ρS2p_bulk*(ρ_est+stdρ_HI))))
-    xlabel("depth [nm]",fontsize=14); 
+    xlabel("distance [nm]",fontsize=14); 
     ylabel("S2p molar concentration [M]",fontsize=14) 
     xticks(fontsize=14); yticks(fontsize=14); 
     # ax1 = gca()
@@ -141,31 +178,56 @@ if PLOT_FIG
     ax1.yaxis.offsetText.set_size(14)
     ax1.xaxis.offsetText.set_size(14)
     # legend(fontsize=12)
-    legend([(l_ρ,l_ρ_std);l_λ],["estimates\$\\pm\\sigma\$ [M]"; string.("\$\\lambda_e\$ = ",floor.(100λ_all)/100," [nm]")],fontsize=12,borderpad=0.4,borderaxespad=0.2,handletextpad=0.5,handlelength=1.0,framealpha=0.4)
+    legend([(l_ρ,l_ρ_std);l_λ;l_stoi],["estimates\$\\pm\\sigma\$ [M]"; string.("\$\\lambda_e\$ = ",floor.(100λ_all)/100," [nm]");"stoichiometric profile"],fontsize=12,borderpad=0.4,borderaxespad=0.2,handletextpad=0.5,handlelength=1.0,framealpha=0.4)
 
     ax2 = subplot(122)
-    scatter(λ_all,ρS2p_bulk*y_data_1)
-    ylim(0.9ρS2p_bulk*minimum(y_data_1),1.1ρS2p_bulk*maximum(y_data_1))
-    xlabel("IMFP [nm]",fontsize=14); 
-    ylabel("peak area [mol]",fontsize=14)
-    xticks(fontsize=14); yticks(fontsize=14); 
-    ax2.ticklabel_format(axis="y",style="sci",scilimits=(-1,1),useOffset=true)
-    ax2.yaxis.offsetText.set_size(14)
-    ax2.xaxis.offsetText.set_size(14)
-    legend(["data"],fontsize=12,borderpad=0.4,borderaxespad=0.2,handletextpad=0.5,handlelength=1.0,framealpha=0.4)
-    
+    if false
+        scatter(λ_all,ρS2p_bulk*y_data_1)
+        ylim(0.9ρS2p_bulk*minimum(y_data_1),1.1ρS2p_bulk*maximum(y_data_1))
+        xlabel("IMFP [nm]",fontsize=14); 
+        ylabel("peak area [mol]",fontsize=14)
+        xticks(fontsize=14); yticks(fontsize=14); 
+        ax2.ticklabel_format(axis="y",style="sci",scilimits=(-1,1),useOffset=true)
+        ax2.yaxis.offsetText.set_size(14)
+        ax2.xaxis.offsetText.set_size(14)
+        legend(["data"],fontsize=12,borderpad=0.4,borderaxespad=0.2,handletextpad=0.5,handlelength=1.0,framealpha=0.4)
+    else
+        ρ_solvent = MINOTAUR.f_logistic.(r,μ0,Δr_water;A=1.0)
+        # l_excess, = plot(1.0e3*(r[1:NB].-μ0),ρ_cp[1:NB]./ρ_solvent[1:NB],color=color_array[1])
+        l_excess, = plot(1.0e3*(r.-μ0),ρ_cp./ρ_solvent,color=color_array[1])
+        l_excess_std =  fill_between(1.0e3*(r.-μ0),(μρ_est-σρ_est)./ρ_solvent,(μρ_est+σρ_est)./ρ_solvent,alpha=0.5,color=color_array[1])
+        xlim(-1.1maximum([d0*1.0e3; λ_all; 5.0]),1.0e3δr)
+        # ylim(-1.0,400.0)
+        ylim(-1.0,800.0)
+        xlabel("distance [nm]",fontsize=14); 
+        ylabel("S2p relative excess",fontsize=14) 
+        xticks(fontsize=14); yticks(fontsize=14); 
+        # ax1 = gca()
+        ax1.ticklabel_format(axis="y",style="sci",scilimits=(-1,1),useOffset=true)
+        ax1.yaxis.offsetText.set_size(14)
+        ax1.xaxis.offsetText.set_size(14)
+        legend([(l_excess,l_excess_std)],["estimated excess\$\\pm\\sigma\$"],fontsize=12,borderpad=0.4,borderaxespad=0.2,handletextpad=0.5,handlelength=1.0,framealpha=0.4)
+    end
 
     tight_layout(pad=0.2, w_pad=0.2, h_pad=0.2)
     ax1.text(-0.1, 0.97, "a)", transform=ax1.transAxes,fontsize=16)
     ax2.text(0.05, 0.1+0.75, replace(data_filesS2p[idx_file][1:end-5],"_"=>" "), transform=ax2.transAxes,fontsize=16)
     ax2.text(-0.1, 0.97, "b)", transform=ax2.transAxes,fontsize=16)
 
-    savefig(string(data_filesS2p[idx_file][1:end-5],"_reconstruction_and_data_smooth_edge.png"))
-    savefig(string(data_filesS2p[idx_file][1:end-5],"_reconstruction_and_data_smooth_edge.pdf"))
+    savefig(string(data_filesS2p[idx_file][1:end-5],"_reconstruction_and_data_smooth_edge_S.png"))
+    savefig(string(data_filesS2p[idx_file][1:end-5],"_reconstruction_and_data_smooth_edge_S.pdf"))
 
-    if SAMPLING
-        figure()
-        plot(deltaU)
-    end
+
+    figure()
+    plot(deltaU)
 end
 
+if SAVE_DATA
+    figure()
+    # scatter(1.0e8α_al_noise,1.0e8(α_al_noise_est-α_al_noise))
+    scatter(1.0e8α_al_noise,100*(α_al_noise_est-α_al_noise)./α_al_noise)
+    xlabel("\$\\alpha_{\\mathrm{stoichiometric}}\$ [cm\$^{-2}\$]")
+    ylabel("relative variation [\\%]")
+
+    include("save_data_S2p.jl")
+end

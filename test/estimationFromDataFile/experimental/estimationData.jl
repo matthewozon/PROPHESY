@@ -1,11 +1,9 @@
-# load simulated data, and fit the peaks, estimate the alignment factor, remove the noise and estimate the sensitivity matrices
 ## load the packages used in the estimation
 # plotting
 using PyPlot
 using PyCall
 rc("text", usetex=true)
 rc("figure",max_open_warning=50)
-# using myPlot
 color_array = ["tab:blue"; "tab:orange"; "tab:green"; "tab:red"; "tab:purple"; "tab:brown"; "tab:pink"; "tab:gray"; "tab:olive"; "tab:cyan"; "magenta"; "yellow"; "hotpink"; "darkmagenta"; "chartreuse"; "deepskyblue"; "navy"; "darkcyan"; "crimson"; "firebrick"]; 
 
 # data manipulation (loading, writing, etc)
@@ -25,11 +23,8 @@ using MINOTAUR
 
 # inversion package
 using XPSinv
+using XPSsampling
 
-SAMPLING = true
-if SAMPLING
-    using XPSsampling
-end
 
 SAVE_DATA = true
 if SAVE_DATA
@@ -70,8 +65,9 @@ z0 = 5000.0;
 
 # make sure that δr>dboundary;
 # bulk depth and boundary distance
-d0 = 2.0*1.92e-3-Δr_water;
-dboundary = 1.92e-3+Δr_water;
+d0 = 2.0*1.92e-3-Δr_water;    # bulk
+d0 = 10.0*1.92e-3-Δr_water;    # bulk
+dboundary = 1.92e-3+Δr_water; # boundary 
 
 if (δr<=dboundary)
     δr = dboundary
@@ -94,14 +90,30 @@ N_trunc = NB-N0+1;
 σB     = 0.1;        
 
 # standard deviation of the smoothness a priori
-σd     = 1.0 # 0.1
+if FLAG_CC
+    σd     = 0.5 # 1.0 # 0.1
+else
+    σd     = 0.5 # 0.1 # 0.01
+end
 cor_len_lowres = 2.5;
 
 # amplitude of the communication mecanism for sampling the a posteriori model
-σw     = 5.0e-3  # only used for sampling
+if FLAG_CC
+    σw     = 0.5e-2
+else
+    σw     = 1.0e-3
+end
+cor_len_sampling = N_trunc/5;
+Ns      = 1000000;
+Ns_burn =  100000;
 
-
-
+# optimization 
+τ0 = 1.0e1 # 
+N_max_iter = 200000# 0#00; 
+r_n_tol=0.000001; # 0.001
+r_y_tol=0.000001; # 0.001
+W_stop = collect(LinRange(1.0,10.0,N_trunc));
+x00 = collect(LinRange(1.0,0.0,N_trunc))
 
 
 # unit conversion constant (some of the quantities are in μm, some in L and some in Mbarn)
@@ -131,14 +143,15 @@ thenSortBy = Symbol("Binding energy")     # colmun name for the binding energy (
 
 
 # alignement from C1s data
-include("loadDataAndAlignment.jl")
+dt_load = @elapsed include("loadDataAndAlignment.jl")
+println("Loading and computing the measurement models: ",dt_load," s")
 
 # now, you can run the inversion with the data
 
-y_data_1 # SNR OK
-y_data_2 # SNR OK ish
-y_data_3 # SNR... well, there's no need to try this one
-σ_noise  # standard deviation of the normalized noise
+# y_data_1 # SNR OK
+# y_data_2 # SNR OK ish
+# y_data_3 # SNR... well, there's no need to try this one
+# σ_noise  # standard deviation of the normalized noise
 
 
 ##
@@ -153,13 +166,9 @@ if PLOT_FIG
     figure(figsize=[10, 5])
     ax1 = subplot(121)
     l_ρ, = plot(1.0e3*(r.-μ0),ρC1s_bulk*ρ_cp,color=color_array[1])
-    if SAMPLING
-        # l_ρ_std =  fill_between(1.0e3*(r[N0:end-1].-μ0),ρC1s_bulk*(ρ_est-stdρ_HI),ρC1s_bulk*(ρ_est+stdρ_HI),alpha=0.5,color=color_array[1])
-        # l_ρ_std =  fill_between(1.0e3*(r[N0:NB].-μ0),ρC1s_bulk*(ρ_est-stdρ_HI),ρC1s_bulk*(ρ_est+stdρ_HI),alpha=0.5,color=color_array[1])
-        σρ_est = [σB*ones(Cdouble,N0-1); stdρ_HI; σB*ones(Cdouble,Nr-NB)]
-        μρ_est = ρ_cp[:];
-        l_ρ_std =  fill_between(1.0e3*(r.-μ0),ρC1s_bulk*(μρ_est-σρ_est),ρC1s_bulk*(μρ_est+σρ_est),alpha=0.5,color=color_array[1])
-    end
+    σρ_est = [σB*ones(Cdouble,N0-1); stdρ_HI; σB*ones(Cdouble,Nr-NB)]
+    μρ_est = ρ_cp[:];
+    l_ρ_std =  fill_between(1.0e3*(r.-μ0),ρC1s_bulk*(μρ_est-σρ_est),ρC1s_bulk*(μρ_est+σρ_est),alpha=0.5,color=color_array[1])
     l_λ = Array{PyObject,1}(undef,Ndata)
     for i in 1:Ndata
         l_λ[i], = plot(-[λ_all[i]; λ_all[i]],[0.0; 1.0], color=color_array[i+1])
@@ -196,12 +205,7 @@ if PLOT_FIG
         ρ_solvent = MINOTAUR.f_logistic.(r,μ0,Δr_water;A=1.0)
         # l_excess, = plot(1.0e3*(r[1:NB].-μ0),ρ_cp[1:NB]./ρ_solvent[1:NB],color=color_array[1])
         l_excess, = plot(1.0e3*(r.-μ0),ρ_cp./ρ_solvent,color=color_array[1])
-        if SAMPLING
-            # σρ_est = [σB*ones(Cdouble,N0-1); stdρ_HI; σB*ones(Cdouble,Nr-NB)]./ρ_solvent
-            # μρ_est = ρ_cp./ρ_solvent;
-            l_excess_std =  fill_between(1.0e3*(r.-μ0),(μρ_est-σρ_est)./ρ_solvent,(μρ_est+σρ_est)./ρ_solvent,alpha=0.5,color=color_array[1])
-            # l_excess_std =  fill_between(1.0e3*(r[1:NB].-μ0),(μρ_est[1:NB]-σρ_est[1:NB])./ρ_solvent[1:NB],(μρ_est[1:NB]+σρ_est[1:NB])./ρ_solvent[1:NB],alpha=0.5,color=color_array[1])
-        end
+        l_excess_std =  fill_between(1.0e3*(r.-μ0),(μρ_est-σρ_est)./ρ_solvent,(μρ_est+σρ_est)./ρ_solvent,alpha=0.5,color=color_array[1])
         xlim(-1.1maximum([d0*1.0e3; λ_all; 5.0]),1.0e3δr)
         # ylim(-1.0,400.0)
         ylim(-1.0,800.0)
@@ -228,26 +232,11 @@ if PLOT_FIG
         savefig(string(data_filesC1s[idx_file][1:end-5],"_reconstruction_and_data_smooth_edge_COSO3.pdf"))
     end
 
-    if SAMPLING
-        figure()
-        plot(deltaU)
-    end
+    figure()
+    plot(deltaU)
 end
 
 if SAVE_DATA
-    # estimate the alignment parameter using the estimated concentration profile 
-    α_al_noise_est = zeros(Cdouble,Ndata);
-    for i in 1:Ndata
-        local plot_sym = Symbol(string("hν_",df_Eph[!,photon_sym][i]));
-        local Be       = collect(skipmissing(dictAllData[plot_sym].Wavelength));
-        local dKe      = median(abs.(Be[2:end]-Be[1:end-1]))
-        local σ_all = collect(skipmissing(dictAllData[plot_sym].Curve1.+dictAllData[plot_sym].Curve2.+dictAllData[plot_sym].Curve3)); # C1s
-        σ_all = σ_all/(dKe*sum(σ_all));
-        local Sbg                = collect(skipmissing(dictAllData[plot_sym].Background));
-        local S_noisy            = collect(skipmissing(dictAllData[plot_sym].Raw_spectrum));
-        α_al_noise_est[i],_    = noiseAndParameterEstimation(σ_all,H_geom[i,:],S_noisy,Sbg,ρC1s_bulk*ρ_cp)
-        α_al_noise_est[i]      = α_al_noise_est[i]/(κ_units*σ_C1s_exp(convert(Cdouble,df_Eph[!,photon_sym][i]))*dictPeak[plot_sym][!,ph_flu_sym][1])
-    end
     figure()
     # scatter(1.0e8α_al_noise,1.0e8(α_al_noise_est-α_al_noise))
     scatter(1.0e8α_al_noise,100*(α_al_noise_est-α_al_noise)./α_al_noise)
