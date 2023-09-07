@@ -43,9 +43,10 @@ using Printf
 using NMOpt    # package at (https://github.com/matthewozon/NMOpt)    # used in XPSutils.jl
 using MINOTAUR # package at (https://github.com/matthewozon/MINOTAUR) # used in smooth_edge.jl for the computation of integrals (quadrature of composed function)
 
-# penetration depth and cross-section values: not sure it's really useful in this module since the values are supposed to be known to create the models
+# attenuation length and photo-ionization cross-section
 export λe, λe_exp, σ_cs_orb, σ_bg_density, σ_bg_lin_density, σ_bg
-export σ_C1s_exp,σ_O1s_exp,σ_S2p_exp
+export σ_C1s_exp,σ_O1s_exp,σ_S2p_exp,σ_Na1s_exp # interpolation model: can be biased
+# export σ_Na1s, σ_S2p, σ_O1s, σ_C1s              # tabled total photo-ionization cross-section from https://vuo.elettra.eu/services/elements/WebElements.html
 
 # data enhancement: baseline correction and peak fitting (requires sampling of the spectra)
 export baseline_removal, EM_peaks, cross_section_spread_function, cross_section_spread_function_sample # in XPSutils.jl
